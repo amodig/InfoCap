@@ -51,8 +51,8 @@ $ ./batcher.sh "align_pair('./path/to/dir/testSeq1.txt', './path/to/dir/testSeq2
 ```
 
 2) With 2 files + CTW + Var-GP:
-```
-`$ ./batcher_gp.sh "align_pair('./path/to/dir/9.txt', './path/to/dir/10.txt', \
+```bash
+$ ./batcher_gp.sh "align_pair('./path/to/dir/9.txt', './path/to/dir/10.txt', \
 './path/to/dir/alignment/')" "evalGPdir('./path/to/dir/', './path/to/dir/gp')" \
 "./frontend.R --fps 200 --method pairdir --maindir ./path/to/dir/gp --dim_reduction gp \
 --calculate_residuals TRUE --save_residuals FALSE --residualdir residuals/ \
