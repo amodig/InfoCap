@@ -104,7 +104,7 @@ if (opt$method == "subdir") {
                 save_pca = opt$save_pca, normalize = opt$normalize, residualdir = opt$residualdir,
                 remove_duplicates = opt$remove_duplicates, feature_throughputs = opt$feature_throughputs,
                 align = opt$align, write_results = opt$write_results, alignment_dir = opt$alidir,
-                pca_dir = opt$pca_dir)
+                pca_dir = opt$pca_dir, results_file = opt$resultfile)
 } else if (opt$method == "pairdir") {
     try(setwd(opt$maindir))
     output = pairdir_residual_complexity(fps = opt$fps, dim_reduction = opt$dim_reduction,

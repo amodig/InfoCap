@@ -30,6 +30,7 @@ library("kernlab")
 # - write_results           whether write results in to an ASCII file
 # - alignment_dir           name of the alignment index folder
 # - dimred_dir              (not in use)
+# - results_file				name of the TSV-ASCII results file
 #
 # Example of the directory tree:
 # - working directory
@@ -66,7 +67,7 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca", calcula
                             save_residuals = FALSE, save_pca = FALSE, normalize = FALSE,
                             residualdir = "residuals", pca_dir = "pca", remove_duplicates = TRUE,
                             feature_throughputs = FALSE, align = TRUE, write_results = FALSE,
-                            alignment_dir = "alignment", dimred_dir = ".") {
+                            alignment_dir = "alignment", dimred_dir = ".", results_file = "results.txt") {
     if (save_residuals) calculate_residuals <- TRUE
     
     # get maindir path
@@ -119,12 +120,11 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca", calcula
         # set path back to maindir
         setwd(maindir)
         if (write_results) {
-            filename <- "results.txt"
             # write dir name
             write(sprintf("Folder: %s", subdirs[i]), file = filename, append = TRUE, ncolumns=1)
             # write dir results
             result_frame <- results[[i]]$results
-            write.table(result_frame, file=filename, sep='\t', append=TRUE, col.names=TRUE, row.names=TRUE)
+            write.table(result_frame, file=results_file, sep='\t', append=TRUE, col.names=TRUE, row.names=TRUE)
         }
     }
 
