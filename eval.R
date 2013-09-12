@@ -30,7 +30,7 @@ library("kernlab")
 # - write_results           whether write results in to an ASCII file
 # - alignment_dir           name of the alignment index folder
 # - dimred_dir              (not in use)
-# - results_file				name of the TSV-ASCII results file
+# - results_file            name of the TSV-ASCII results file
 #
 # Example of the directory tree:
 # - working directory
