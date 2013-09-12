@@ -121,7 +121,7 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca", calcula
         setwd(maindir)
         if (write_results) {
             # write dir name
-            write(sprintf("Folder: %s", subdirs[i]), file = filename, append = TRUE, ncolumns=1)
+            write(sprintf("Folder: %s", subdirs[i]), file=results_file, append = TRUE, ncolumns=1)
             # write dir results
             result_frame <- results[[i]]$results
             write.table(result_frame, file=results_file, sep='\t', append=TRUE, col.names=TRUE, row.names=TRUE)
