@@ -12,21 +12,21 @@ cmdM2="${2}"
 cmdR="${3}"
 
 # NOTE: will concatenate all outputs into a single file
-'---------------------------------------------------' >> output.log
-date >> output.log
+echo '----------------------------NEW GP-BATCHER-------------------------------' >> ${logpath}
+date >> ${logpath}
 
 echo 'Running MATLAB command:'
 echo ${cmdM1} > matlab_command1.m
 cat matlab_command1.m
 # execute MATLAB script (CTW)
-# stdout and stderr to stdout and append to log  
-(${matlab_exec} -nojvm -nodisplay -nosplash < matlab_command1.m 2>&1) | tee -a ${logpath} 
+# stdout and stderr to stdout and append to log
+(${matlab_exec} -nojvm -nodisplay -nosplash < matlab_command1.m 2>&1) | tee -a ${logpath}
 
 echo 'Running MATLAB command:'
 echo ${cmdM2} > matlab_command2.m
 cat matlab_command2.m
 # execute MATLAB script (GP)
-(${matlab_exec} -nojvm -nodisplay -nosplash < matlab_command2.m 2>&1) | tee -a ${logpath} 
+(${matlab_exec} -nojvm -nodisplay -nosplash < matlab_command2.m 2>&1) | tee -a ${logpath}
 
 # execute R script (TP)
 echo 'Running Rscript:'

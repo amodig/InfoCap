@@ -1,66 +1,79 @@
+# Algorithms for evaluating movement throughput
+
 # The MIT License (MIT)
 # Copyright (c) 2013 Arttu Modig
+# Version 1.0
 
 # parameters
 step <- 2
 pca_variance_ratio <- 0.9
 
-# Return residuals from the AR(2) model as a list where each element is the
-# residual vector for the corresponding feature, given the observed sequence.
-residuals <- function(sequence) {
+# Return the AR(2) model as a list of:
+# 1) residuals: each element is the residual vector for the corresponding feature,
+# given the observed sequence.
+# 2) prediction: each element is the predicted vector for the corresponding feature,
+# given the observed sequence.
+model <- function(sequence) {
     n <- NROW(sequence) - step
     if (NCOL(sequence)==1) {
         sequence_predictors <- cbind(sequence[1:n], sequence[1:n+step-1])
         observed_sequence <- sequence[1:n+step]
     } else {
-        sequence_predictors <- cbind(sequence[1:n,],sequence[1:n+step-1,])    
+        sequence_predictors <- cbind(sequence[1:n,], sequence[1:n+step-1,])    
         observed_sequence <- sequence[1:n+step,]
     }
 
     frames <- NROW(observed_sequence)
     num_features <- NCOL(observed_sequence)
-    resid = matrix(nrow = frames, ncol = num_features)
+    residuals = matrix(nrow = frames, ncol = num_features)
+    prediction = matrix(nrow = frames, ncol = num_features)
+    
+    for (feature_idx in 1:num_features) {
+        QR <- get_qr_for_feature(feature_idx, sequence_predictors, observed_sequence)
+        residuals[, feature_idx] <- get_residuals_for_feature(QR, observed_sequence, feature_idx)
+        prediction[, feature_idx] <- get_prediction_for_feature(QR, observed_sequence, feature_idx)
+    }
+    return(list("residuals"=residuals, "prediction"=prediction))
+}
 
-    for (i in 1:num_features)
-        resid[, i] <- get_residuals_for_feature(i, sequence_predictors,
-                                                    observed_sequence)
-    return(resid)
+get_qr_for_feature <- function(feat, predictors, observed) {
+    frames <- NROW(observed)
+    # extract regressors depending on input size
+    if (NCOL(predictors) == NCOL(observed)) {
+        QR <- qr(cbind(matrix(1,frames,1), predictors[, feat]))
+    } else {
+        QR <- qr(cbind(matrix(1,frames,1), predictors[, feat],
+            predictors[, NCOL(observed) + feat]))
+    }
 }
 
 # Calculates the residuals for a given feature in the regression
 # model.
 #
 # Parameters:
-# - feat        the column number of the feature
-# - predictors  AR model predictors
-# - observed    the observed sequence
-get_residuals_for_feature <- function(feat, predictors, observed) {
-    frames <- NROW(observed)
-    
-    #cat("dim pred: ")
-    #cat(dim(predictors));
-    #cat("\n")
-    # casting to array
-    #predictors <- array(predictors)
-    #observed <- array(observed)
-    
-    #cat("dim pred after casting: ")
-    #cat(dim(predictors));
-    #cat("\n")
-    #print(sprintf("dim obs: %d",NCOL(observed)));
-    
-    # extract regressors depending on input size
-    if (NCOL(predictors) == NCOL(observed)) {
-        predictors <- qr(cbind(matrix(1,frames,1), predictors[, feat]))
-    } else {
-        predictors <- qr(cbind(matrix(1,frames,1), predictors[, feat],
-            predictors[, NCOL(observed) + feat]))
-    }
-
+# - QR              the QR decomposition for a sequence
+# - observed        the observed sequence
+# - feature_idx     feature index
+get_residuals_for_feature <- function(QR, observed, feature_idx) {
     if (NCOL(observed)==1) {# needs special handling in R
-        return(qr.resid(predictors, observed))
+        return(qr.resid(QR, observed))
     } else {
-        return(qr.resid(predictors, observed[, feat]))
+        return(qr.resid(QR, observed[, feature_idx]))
+    }   
+}
+
+# Calculates the prediction for a given feature in the regression
+# model.
+#
+# Parameters:
+# - QR              the QR decomposition for a sequence
+# - observed        the observed sequence
+# - feature_idx     feature index
+get_prediction_for_feature <- function(QR, observed, feature_idx) {
+    if (NCOL(observed)==1) {# needs special handling in R
+        return(qr.fitted(QR, observed))
+    } else {
+        return(qr.fitted(QR, observed[, feature_idx]))
     }   
 }
 
@@ -147,36 +160,4 @@ normalize_features <- function(a) {
     a[is.nan(a)]<-0
 
     return(a)
-}
-
-#### Deprecated:
-
-# Deprecated function for KPCA
-kernelpca <- function(data) {
-    data <- normalize_features(data)
-    
-    principal_components <- kpca(data, kernel="rbfdot", kpar = list(sigma = 0.1))
-    num_eigenvecs <- choose_number_of_eigenvectors_kpca(principal_components@eig)
-    
-    eigenvectors <- principal_components@pcv[,1:num_eigenvecs]
-    return(eigenvectors)
-}
-
-# Deprecated function for KPCA
-kernelfa <- function(data) {
-    data <- normalize_features(data)
-    
-    principal_components <- kfa(data, kernel="rbfdot", kpar = list(sigma = 0.1))
-    return(principal_components$xmatrix)
-}
-
-# Deprecated function for KPCA
-choose_number_of_eigenvectors_kpca <- function(eig) {
-    threshold <- 0.9*sum(eig)
-    sum <- 0
-    for (k in 1:length(eig)) {
-        sum <- sum + eig[k]
-        if (sum >= threshold)
-            return(k)
-    }
 }

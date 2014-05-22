@@ -1,41 +1,58 @@
-function model = evalVarGP(inputFilePath, outputFolderPath, varargin)
+function model = evalVarGP(inputFilePath, outputFolderPath, latentDim, iters)
 % EVALVARGP perform variational bayesian VAR-GP-LVM
 %
-% input: input file path, output folder
+% input: input file path, output folder, latent dims (force to, optional), dimensions (to use, optional) 
 % output: VAR-GP-LVM model of the input data
 %
 % version 1.31
 % The MIT License (MIT)
 % Copyright (c) 2013 Arttu Modig
 
-scale = 1;
+if ~isdeployed, % if not, the code is not compiled
+    addpath(genpath('./gp/'))
+end
 
 % Fix seeds
 randn('seed', 1e5);
 rand('seed', 1e5);
 
-if ~isdeployed, % if not, the code is not compiled
-    addpath(genpath('./gp/'))
-end
+% Define constants
+scale = 1;
+%iters = 1000;
+indPoints = 100; % inducing points
+%latentDim = 9; % the #latentdims with ARD
+dynUsed = 1; % use dynamics
+fixedBetaIters = 50;
+fixInd = 0;
+baseKern = {'rbfard2', 'white'};
+dynamicKern = {'rbf', 'bias', 'white'};
+reconstrIters = 2000;
+learnVariance = 0;
+initX ='ppca';
+doReconstr = 0;
+
+%% Load data
 
 % read input (residual) data
-fprintf(1,'Reading data file:  %s\n', inputFilePath);
+fprintf(1,'# Reading data file:  %s\n', inputFilePath);
 Y = dlmread(inputFilePath,'\t');
 % delete zero features
 Y = Y(:,any(Y)); % (any ignores entries that are NaN)
 % read dimensions
-[~,ncol] = size(Y);
+[~,d] = size(Y);
 
 % create outputfolder (if not exist)
-fprintf(1,'Output folder: %s\n', outputFolderPath);
+fprintf(1,'# Output folder: %s\n', outputFolderPath);
 try
-    if ~exist(outputFolderPath, 'dir')
+    if ~exist(outputFolderPath, 'dir') % searches also subdirectories!
       mkdir(outputFolderPath);
-      fprintf(1,'Created successfully!\n');
+      fprintf(1,'# Created successfully!\n');
     end;
 catch err,
     rethrow(err);
 end
+
+%% Set up model
 
 if scale,
     origBias = mean(Y, 1);
@@ -44,27 +61,36 @@ if scale,
     Y = Y.*repmat(origScale, size(Y, 1), 1);
 end
 
-% Set up model (from hgplvm)
-%options = fgplvmOptions('ftc');
 % Set up model (from demOilVargplvm)
+%options = vargplvmOptions('dtcvar');
+%options.kern = {'rbfard2', 'bias', 'white'};
+%options.numActive = 100; 
+%options.optimiser = 'scg';
+%dynUsed = 1;
+
+% Set up model (from demCmu35gplvmVargplvm3.m)
 options = vargplvmOptions('dtcvar');
-options.kern = {'rbfard2', 'bias', 'white'};
-options.numActive = 100; 
+options.kern = baseKern; % default: {'rbfard2', 'white'}
+options.numActive = indPoints; % default: 100
 options.optimiser = 'scg';
-dynUsed = 1;
-% select the preliminary number of latent dimensions
-if (ncol < 10),
-  latentDim = ncol;
-else
-  latentDim = 10;
+
+% select the preliminary number of latent dimensions (default: 9)
+if (d < latentDim),
+  latentDim = d;
 end
 
-model = vargplvmCreate(latentDim, ncol, Y, options);
-
+fprintf(1,'# Creating the model...\n');
+if fixInd
+    options.fixInducing = 1;
+    options.fixIndices=1:indPoints;
+end
+model = vargplvmCreate(latentDim, d, Y, options);
 model = vargplvmParamInit(model, model.m, model.X); 
+model.beta=1/(0.01*var(model.m(:)));
 model.vardist.covars = 0.5*ones(size(model.vardist.covars)) + 0.001*randn(size(model.vardist.covars));
+model.reconstrIters = reconstrIters;
 
-dynamicKern = {'rbf', 'bias', 'white'};
+% set timestamps
 seqInd = 1:size(Y,1);
 t = 1:max(seqInd);
 t = t(seqInd)';
@@ -76,8 +102,8 @@ if dynUsed
     optionsDyn.inverseWidth=30;
     %   optionsDyn.vardistCovars = vardistCovarsMult;
     %optionsDyn.seq = seq;
-    optionsDyn.learnVariance = 0;
-    optionsDyn.initX = 'ppca';
+    optionsDyn.learnVariance = learnVariance; % default: 0
+    optionsDyn.initX = initX; % default: 'ppca'
     optionsDyn.regularizeMeans = 0;
     
     % Dynamic kernel:
@@ -123,7 +149,6 @@ if dynUsed
 end
 modelInit = model;
 
-fixedBetaIters = 50;
 % do not learn beta for few iterations for intitilization
 if fixedBetaIters > 0
     model.learnBeta = 0;
@@ -135,8 +160,7 @@ if fixedBetaIters > 0
     %modelWriteResult(model, dataSetName, experimentNo);
 end
 
-% Optimise the model.
-iters = 1000;
+%% Optimise the model.
 display = 1;
 model.learnBeta = 1;
 model.iters = 0;
@@ -146,29 +170,16 @@ model = vargplvmOptimise(model, display, iters);
 model.iters = model.iters + iters;
 model.date = date;
 
-% Save the results.
+%% Save the model.
+fprintf(1,'# Saving model after doing %d iterations... \n',iters);
 [~, name, ~] = fileparts(inputFilePath);
 capName = name;
 capName(1) = upper(capName(1));
 if scale,
-    save(['vargpmodel' capName '.mat'], 'model', 'origScale', 'origBias');
+    save([outputFolderPath filesep 'model-vargplvm-' capName '.mat'], 'model', 'origScale', 'origBias');
 else
-    save(['vargpmodel' capName '.mat'], 'model');
+    save([outputFolderPath filesep 'model-vargplvm-' capName '.mat'], 'model');
 end
-fprintf(1,'The model has been saved to %s.',['vargpmodel' capName '.mat']);
+fprintf(1,'# The model has been saved to %s.\n',['vargpModel' capName '.mat']);
 
-% Reduce dimensions (leaves only non-zero components)
-redX = model.X(:, var(model.X) > 1e-6);
-
-% Write reduced data (use original filename)
-try
-  dlmwrite(sprintf('%s/%s.txt', outputFolderPath, name), redX,'\t');
-  fprintf(1,'The latent-vargplvm-data has been written to %s.', ...
-    sprintf('%s/%s.txt', outputFolderPath, name));
-catch err,
-  % could be somehow more helpful...
-  fprintf(1,'Could not write output.\n');
-  rethrow(err);
-end
-
-end
+end % end function

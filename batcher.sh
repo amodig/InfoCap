@@ -13,19 +13,18 @@ cmdMATLAB="${1}"
 cmdR="${2}"
 
 # Note: will concatenate log file
-'---------------------------------------------------' >> output.log
+echo '--------------------------------NEW BATCHER------------------------------' >> ${logpath}
 date >> ${logpath}
 
 # execute MATLAB script
 echo 'Running MATLAB command:'
 echo ${cmdMATLAB} > matlab_command.m
 cat matlab_command.m
-# stdout and stderr to stdout and append to log  
-(${matlab_exec} -nojvm -nodisplay -nosplash < matlab_command.m 2>&1) | tee -a ${logpath} 
+# stdout and stderr to stdout and append to log
+(${matlab_exec} -nojvm -nodisplay -nosplash < matlab_command.m 2>&1) | tee -a ${logpath}
 
 # execute R script
 echo 'Running Rscript:'
 echo ${cmdR}
-(${r_exec} ${cmdR} 2>&1) | tee -a ${logpath} 
+(${r_exec} ${cmdR} 2>&1) | tee -a ${logpath}
 
-#rm matlab_command.m

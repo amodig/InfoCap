@@ -1,11 +1,11 @@
-function align_pair(file1, file2, outputFolder, varargin)
+function align_pair(file1, file2, outputPath, varargin)
 % ALIGN_PAIR Align a pair of sequences with CTW.
-% ALIGN_PAIR(FILE1, FILE2, OUTPUTFOLDER) writes and returns the
+% ALIGN_PAIR(FILE1, FILE2, OUTPUTPATH) writes and returns the
 % alignment vectors of two input sequences.
 %
 % Input:
 % sequence files,
-% output folder,
+% output path (must end into output folder),
 % features to use (optional)
 %
 % Output:
@@ -39,8 +39,8 @@ seq2 = dlmread(file2,'\t');
 
 % create outputfolder (if not exist)
 try
-    if ~exist(outputFolder, 'dir')
-      mkdir(outputFolder);
+    if ~exist(outputPath, 'dir')
+      mkdir(outputPath);
     end;
 catch err,
     rethrow(err);
@@ -76,9 +76,9 @@ ali2 = aliCtw.P(:,2);
 % write alignment indeces
 % NOTE: ignores original filenames
 try
-    dlmwrite(sprintf('%s/%d_ali_%d.txt', outputFolder, 1,2), ali1,'\t');
-    dlmwrite(sprintf('%s/%d_ali_%d.txt', outputFolder, 2,1), ali2,'\t');
-    fprintf(1,'Alignment index vectors written succesfully to output folder %s\n', outputFolder);
+    dlmwrite(sprintf('%s/%d_ali_%d.txt', outputPath, 1,2), ali1,'\t');
+    dlmwrite(sprintf('%s/%d_ali_%d.txt', outputPath, 2,1), ali2,'\t');
+    fprintf(1,'Alignment index vectors written succesfully to: %s\n', outputPath);
 catch err,
     % could be somehow more helpful...
     fprintf(1,'Could not write output.\n');

@@ -1,80 +1,35 @@
+# Functions for handling the data.
+
 # The MIT License (MIT)
 # Copyright (c) 2013 Arttu Modig
+# Version 1.02
 
 source("infocapacity.R")
 data_handling_debug <- FALSE
 
-# Loads and returns the sequence denoted by the given
-# sequence number (assumed to be in the current working directory)
-load_sequence <- function(sequence_file, features) {
-    print(sprintf("Reading sequence %s", sequence_file))
-    seq <- read.table(sprintf("%s", sequence_file), sep="\t")
-    if (features[1]) {
-        print("Choosing features:")
-        print(features)
-        seq <- seq[,features,drop=FALSE]
-    }
-    # remove zero feature columns
-    seq <- seq[, colSums(abs(seq)) != 0]
-    
-    return(seq)
-}
-
-# Residual files must have the same name as parent files
-load_residual <- function(sequence_file, features, residualdir) {
-    print(sprintf("Reading residual %s", sequence_file))
-    res <- read.table(sprintf("./%s/%s", residualdir, sequence_file), sep="\t")
-    if (features[1]) {
-        print("Choosing features:")
-        print(features)
-        res <- res[,features]
-    }
-    return(data.matrix(res))
-}
-
-# Loads sequence files and calculates unaligned residuals.
-# Returns a list with:
-# residuals_orig_a  first original residuals
-# residuals_orig_b  second original residuals
-# residuals_alig_a  first aligned residuals
-# residuals_alig_b  second aligned residuals
-load_unaligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, features,
-                                    calculate_residuals, normalize, write_residuals,
-                                    residualdir, remove_duplicates) {
-    # get residuals (and optionally write them)
-    residuals_orig_a <- get_residuals(seqfile_a, features, calculate_residuals,
-                                        normalize, write_residuals, residualdir)
-    residuals_orig_b <- get_residuals(seqfile_b, features, calculate_residuals,
-                                        normalize, write_residuals, residualdir)
-    
-    # cut unaligned residuals to equal length
-    residuals <- cut_to_equal_length(residuals_orig_a, residuals_orig_b)
-    residuals_a <- residuals[[1]]
-    residuals_b <- residuals[[2]]
-               
-    # check for dimensions
-    if (any(dim(residuals_a) != dim(residuals_b)))
-        stop("Cut and/or aligned residual dimensions don't match!")
-        
-    return(list(residuals_orig_a, residuals_orig_b, residuals_a, residuals_b))
-}
-
 # Loads the alignment files corresponding to the given
 # sequence numbers and calculates residuals.
 # Returns a list with:
-# residuals_orig_a  first original residuals
-# residuals_orig_b  second original residuals
-# residuals_alig_a  first aligned residuals
-# residuals_alig_b  second aligned residuals
+# 1) residuals_orig_a  first original residuals
+# 2) residuals_orig_b  second original residuals
+# 3) residuals_alig_a  first aligned residuals
+# 4) residuals_alig_b  second aligned residuals
 load_aligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, features,
-                                    calculate_residuals, normalize, write_residuals,
-                                    residualdir, remove_duplicates, alignment_dir) {
-    # get residuals (and optionally write them)
-    residuals_orig_a <- get_residuals(seqfile_a, features, calculate_residuals,
-                                        normalize, write_residuals, residualdir)
-    residuals_orig_b <- get_residuals(seqfile_b, features, calculate_residuals,
-                                        normalize, write_residuals, residualdir)
-                                        
+                                    calculate_residuals, normalize, remove_duplicates,
+                                   alignment_dir) {
+    # get residuals
+    orig_a <- get_residuals(seqfile_a, features, calculate_residuals, normalize)
+    orig_b <- get_residuals(seqfile_b, features, calculate_residuals, normalize)
+    
+    sequence_a <- orig_a$sequence
+    sequence_b <- orig_b$sequence
+    
+    residuals_orig_a <- orig_a$residuals
+    residuals_orig_b <- orig_b$residuals
+    
+    prediction_a <- orig_a$prediction
+    prediction_b <- orig_b$prediction
+    
     # get alignment
     print(sprintf("Load alignment indeces from folder: %s", alignment_dir))            
     ali_a <- load_aligned(seqnum_a, seqnum_b, alignment_dir)
@@ -96,7 +51,8 @@ load_aligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, fea
     ali_a <- ali_a[!is.na(ali_a)]
     ali_b <- ali_b[!is.na(ali_b)]
         
-    #### align residuals
+    #### align residuals ####
+    
     #residuals_a <- align_residuals(ali_a, residuals_orig_a)
     #residuals_b <- align_residuals(ali_b, residuals_orig_b)
     new_residuals <- align_residuals2(ali_a, ali_b, residuals_orig_a, residuals_orig_b)
@@ -105,22 +61,129 @@ load_aligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, fea
     
     # warning                    
     if (any(is.na(residuals_a[[1]])) || any(is.na(residuals_b[[1]])))
-        stop("STOP: 1. There is NaNs!")
+        stop("load_aligned_residuals: 1. There is NaNs!")
 	
-	# cut aligned residuals to equal length
+	  # cut aligned residuals to equal length
     residuals_alig <- cut_to_equal_length(residuals_a, residuals_b)
     residuals_alig_a <- residuals_alig[[1]]
     residuals_alig_b <- residuals_alig[[2]]
     
     # warning
-    if (any(is.na(residuals_alig_a[[1]])) || any(is.na(residuals_alig_b[[1]]) || is.na(residuals_alig_a[[2]])) || any(is.na(residuals_alig_b[[2]])))
-        stop("STOP: 2. There is NaNs!")
+    if (any(is.na(residuals_alig_a[[1]])) || any(is.na(residuals_alig_b[[1]]) ||
+            is.na(residuals_alig_a[[2]])) || any(is.na(residuals_alig_b[[2]])))
+        stop("load_aligned_residuals: 2. There is NaNs!")
         
     # check for dimensions
     if (any(dim(residuals_alig_a) != dim(residuals_alig_b)))
-        stop("Cut and/or aligned residual dimensions don't match!")
+        stop("load_aligned_residuals: Cut and/or aligned residual dimensions don't match!")
 
-    return(list(residuals_orig_a, residuals_orig_b, residuals_alig_a, residuals_alig_b))
+    return(list("sequence_a"=sequence_a,
+                "sequence_b"=sequence_b,
+                "residuals_orig_a"=residuals_orig_a,
+                "residuals_orig_b"=residuals_orig_b,
+                "residuals_alig_a"=residuals_alig_a,
+                "residuals_alig_b"=residuals_alig_b,
+                "prediction_a"=prediction_a,
+                "prediction_b"=prediction_b))
+}
+
+# Loads sequence files and calculates unaligned residuals.
+# Returns a list with:
+# 1) residuals_orig_a  first original residuals
+# 2) residuals_orig_b  second original residuals
+# 3) residuals_alig_a  first aligned residuals
+# 4) residuals_alig_b  second aligned residuals
+load_unaligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, features,
+                                    calculate_residuals, normalize, remove_duplicates) {
+    # get residuals
+    orig_a <- get_residuals(seqfile_a, features, calculate_residuals, normalize)
+    orig_b <- get_residuals(seqfile_b, features, calculate_residuals, normalize)
+    
+    sequence_a <- orig_a$sequence
+    sequence_b <- orig_b$sequence
+    
+    residuals_orig_a <- orig_a$residuals
+    residuals_orig_b <- orig_b$residuals
+    
+    prediction_a <- orig_a$prediction
+    prediction_b <- orig_b$prediction
+    
+    # cut unaligned residuals to equal length
+    residuals <- cut_to_equal_length(residuals_orig_a, residuals_orig_b)
+    residuals_a <- residuals[[1]]
+    residuals_b <- residuals[[2]]
+               
+    # check for dimensions
+    if (any(dim(residuals_a) != dim(residuals_b)))
+        stop("load_unaligned_residuals: Cut and/or aligned residual dimensions don't match!")
+        
+    return(list("sequence_a"=sequence_a,
+                "sequence_b"=sequence_b,
+                "residuals_orig_a"=residuals_orig_a,
+                "residuals_orig_b"=residuals_orig_b,
+                "residuals_alig_a"=residuals_a,
+                "residuals_alig_b"=residuals_b,
+                "prediction_a"=prediction_a,
+                "prediction_b"=prediction_b))
+}
+
+# Returns the residuals for a given sequence, aligned according
+# to a pre-made residual alignment.
+get_residuals <- function(sequence_file, features, calculate_residuals, normalize) {
+    # empty prediction array
+    prediction <- array()
+  
+    # load sequence
+    sequence <- load_sequence(sequence_file, features)
+    # calculate residuals
+    if (calculate_residuals) {
+        model <- model(sequence) # See in: infocapacity.R
+        residuals <- model$residuals
+        prediction <- model$prediction
+    }
+    # optionally use pre-calculated residuals
+    else residuals <- load_residual(sequence_file, features, residual_dir)
+    
+    # error
+    if (any(is.na(residuals)))
+        stop("get_residuals: There is NaNs!")
+    
+    # normalize residual vectors
+    if (normalize) residuals <- normalize_features(residuals)	  
+        
+    return(list("sequence"=data.matrix(sequence), "residuals"=residuals, "prediction"=prediction))
+}
+
+# Loads and returns the sequence denoted by the given
+# sequence number (assumed to be in the current working directory)
+load_sequence <- function(sequence_file, features) {
+    print(sprintf("Reading sequence %s", sequence_file))
+    seq <- read.table(sprintf("%s", sequence_file), sep="\t")
+    if (features[1]) {
+        print("Choosing features:")
+        print(features)
+        seq <- seq[,features,drop=FALSE]
+    }
+    # remove zero feature columns
+    seq <- seq[, colSums(abs(seq)) != 0]
+}
+
+# Residual files must have the same name as parent files
+load_residual <- function(sequence_file, features, residualdir) {
+    print(sprintf("Reading residual %s", sequence_file))
+    res <- read.table(sprintf("./%s/%s", residualdir, sequence_file), sep="\t")
+    if (features[1]) {
+        print("Choosing features:")
+        print(features)
+        res <- res[,features]
+    }
+    return(data.matrix(res))
+}
+
+load_model <- function(sequence_file, dir) {
+    print(sprintf("Reading residual %s", sequence_file))
+    data <- read.table(sprintf("./%s/%s", dir, sequence_file), sep="\t")
+    return(data.matrix(data))
 }
 
 # Removes duplicated rows from alignment index sequences a and b.
@@ -170,46 +233,6 @@ cut_to_equal_length <- function(a, b, end = TRUE) {
     else if (diff > 0)
         a <- a[(diff+1):NROW(a),]    
     return(list(a, b))
-}
-
-# Returns the residuals for a given sequence, aligned according
-# to a pre-made residual alignment.
-# Parameters:
-# - sequence_file     the name of the file containing the original
-#                    coordinate sequence
-# - alignment        the file containing frame duplication information
-#                    in the aligned data (as output by CTW)
-# - features         the chosen features (if 0, choose all)
-# - calculate        calculate residuals; if FALSE, choose pre-calculated residuals
-# Output:
-# - list of original residuals [1] and aligned residuals [2]
-get_residuals <- function(sequence_file, features, calculate_residuals,
-                                    normalize, write_residuals, residualdir) {
-    # calculate residuals
-    if (calculate_residuals) residuals <- calculate_residuals(sequence_file, features)
-    # optionally use pre-calculated residuals
-    else residuals <- load_residual(sequence_file, features, residualdir)
-    
-    # error
-    if (any(is.na(residuals)))
-        stop("get_residuals: 1. There is NaNs!")
-    
-    if (normalize) residuals <- normalize_features(residuals)	
-    
-    if (write_residuals) write_residuals(residualdir, sequence_file, residuals)
-        
-    return(residuals)
-}
-
-# Returns the residuals for the given sequence as a data frame.
-# If there is a feature vector, return selected features.
-# Parameters:
-# - sequence_num    the number of the sequence
-# - features        the list of selected features
-# - normalize       whether normalize sequences
-calculate_residuals <- function(sequence_file, features) {
-    sequence <- load_sequence(sequence_file, features)
-    return(residuals(sequence)) # in infocapacity.R
 }
 
 # Deprecated! Please see "align_residuals2"
@@ -278,29 +301,15 @@ align_residuals2 <- function(ali_a, ali_b, residuals_a, residuals_b) {
     return(list(aligned_residuals_a, aligned_residuals_b))
 }
 
-# Writes the calculated residuals in the given folder.
+# Writes data in a given folder.
 # Parameters:
-# - residualdir         the folder for residuals
-# - sequence_file       sequence filename
-# - residuals           residual data
-write_residuals <- function(residualdir, sequence_file, residuals) {
-	if (!file.exists(residualdir))
-        dir.create(residualdir)
-    print(sprintf("Writing residuals: %s ...", sequence_file))
-	write.table(residuals, sprintf("%s/%s", residualdir, sequence_file),
-	sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
-}
-
-# Writes the dimension-reduces residuals in the given folder.
-# Parameters:
-# - pcadir              the folder for sequences
-# - sequence_file       sequence filename
-# - sequence            sequence data
-write_pca <- function(pca_dir, sequence_file, sequence) {
-	if (!file.exists(pca_dir))
-        dir.create(pca_dir)
-    print(sprintf("Writing pca data: %s ...", sequence_file))
-	write.table(sequence, sprintf("%s/%s", pca_dir, sequence_file),
+# - dir             the folder for residuals
+# - sequence_file   sequence filename
+# - data            residual data
+write_data <- function(dir, sequence_file, data) {
+	if (!file.exists(dir)) dir.create(dir)
+  print(sprintf("Writing data: %s/%s ...", dir, sequence_file))
+	write.table(data, sprintf("%s/%s", dir, sequence_file),
 	sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
 }
 
