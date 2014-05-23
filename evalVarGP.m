@@ -4,7 +4,7 @@ function model = evalVarGP(inputFilePath, outputFolderPath, latentDim, iters)
 % input: input file path, output folder, latent dims (force to, optional), dimensions (to use, optional) 
 % output: VAR-GP-LVM model of the input data
 %
-% version 1.31
+% version 1.4
 % The MIT License (MIT)
 % Copyright (c) 2013 Arttu Modig
 
