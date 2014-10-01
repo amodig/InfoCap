@@ -16,10 +16,10 @@ data_handling_debug <- FALSE
 # 4) residuals_alig_b  second aligned residuals
 load_aligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, features,
                                     calculate_residuals, normalize, remove_duplicates,
-                                   alignment_dir) {
+                                   alignment_dir, residual_dir) {
     # get residuals
-    orig_a <- get_residuals(seqfile_a, features, calculate_residuals, normalize)
-    orig_b <- get_residuals(seqfile_b, features, calculate_residuals, normalize)
+    orig_a <- get_residuals(seqfile_a, features, calculate_residuals, normalize, residual_dir)
+    orig_b <- get_residuals(seqfile_b, features, calculate_residuals, normalize, residual_dir)
     
     sequence_a <- orig_a$sequence
     sequence_b <- orig_b$sequence
@@ -94,10 +94,11 @@ load_aligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, fea
 # 3) residuals_alig_a  first aligned residuals
 # 4) residuals_alig_b  second aligned residuals
 load_unaligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, features,
-                                    calculate_residuals, normalize, remove_duplicates) {
+                                    calculate_residuals, normalize, remove_duplicates,
+                                    residual_dir) {
     # get residuals
-    orig_a <- get_residuals(seqfile_a, features, calculate_residuals, normalize)
-    orig_b <- get_residuals(seqfile_b, features, calculate_residuals, normalize)
+    orig_a <- get_residuals(seqfile_a, features, calculate_residuals, normalize, residual_dir)
+    orig_b <- get_residuals(seqfile_b, features, calculate_residuals, normalize, residual_dir)
     
     sequence_a <- orig_a$sequence
     sequence_b <- orig_b$sequence
@@ -129,7 +130,7 @@ load_unaligned_residuals <- function(seqfile_a, seqfile_b, seqnum_a, seqnum_b, f
 
 # Returns the residuals for a given sequence, aligned according
 # to a pre-made residual alignment.
-get_residuals <- function(sequence_file, features, calculate_residuals, normalize) {
+get_residuals <- function(sequence_file, features, calculate_residuals, normalize, residual_dir) {
     # empty prediction array
     prediction <- array()
   
@@ -169,11 +170,11 @@ load_sequence <- function(sequence_file, features) {
 }
 
 # Residual files must have the same name as parent files
-load_residual <- function(sequence_file, features, residualdir) {
-    print(sprintf("Reading residual %s", sequence_file))
-    res <- read.table(sprintf("./%s/%s", residualdir, sequence_file), sep="\t")
-    if (features[1]) {
-        print("Choosing features:")
+load_residual <- function(sequence_file, features, residual_dir) {
+    print(sprintf("Reading residual %s/%s", residual_dir, sequence_file))
+    res <- read.table(sprintf("%s/%s", residual_dir, sequence_file), sep="\t")
+    if (features[1]) { #  if  first element exists i.e. any elements exist
+        print("Choosing features:") #  pick only the features indexed in vector features
         print(features)
         res <- res[,features]
     }

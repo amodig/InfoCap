@@ -26,10 +26,10 @@ library("methods")
 # - save_prediction         whether save predictions (default: FALSE)
 # - save_pca                whether save PCA components
 # - normalize               whether normalize features before analysis
-# - residualdir             name of the residual data folder (if saving residuals)
+# - residual_dir            name of the residual data folder
 # - prediction_dir          name of the prediction data folder (if saving predictions)
 # - pca_dir                 name of the PCA folder (if saving PCA components)
-# - gp_dir					        name of the GP-LVM folder (if using the components)
+# - gp_dir                  name of the GP-LVM folder (if using the components)
 # - remove_duplicates       whether remove duplicates after alignment (default: TRUE)
 # - feature_throughputs     whether save feature throughputs
 # - align                   whether time-aligning data or not
@@ -72,7 +72,7 @@ library("methods")
 subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                             calculate_residuals = TRUE, save_residuals = FALSE,
                             save_prediction = FALSE, save_pca = FALSE,
-                            normalize = FALSE, residualdir = "residuals",
+                            normalize = FALSE, residual_dir = "residuals",
                             prediction_dir = "prediction",
                             pca_dir = "pca", gp_dir = "gp", remove_duplicates = TRUE,
                             feature_throughputs = FALSE, align = TRUE,
@@ -117,7 +117,7 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                     save_residuals = save_residuals,
                     save_prediction = save_prediction,
                     save_pca = save_pca, normalize = normalize,
-                    residualdir = residualdir,
+                    residual_dir = residual_dir,
                     prediction_dir = prediction_dir, pca_dir = pca_dir,
                     remove_duplicates = remove_duplicates,
                     align = align, alignment_dir = alignment_dir)
@@ -161,7 +161,7 @@ singledir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                                 save_prediction = FALSE,
                                 save_pca = FALSE,
                                 normalize = FALSE,
-                                residualdir = "residuals",
+                                residual_dir = "residuals",
                                 prediction_dir = "prediction",
                                 pca_dir = "pca",
                                 gp_dir = "gp",
@@ -198,7 +198,7 @@ singledir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                 save_residuals = save_residuals,
                 save_prediction = save_prediction,
                 save_pca = save_pca, normalize = normalize,
-                residualdir = residualdir,
+                residual_dir = residual_dir,
                 prediction_dir = prediction_dir, pca_dir = pca_dir,
                 remove_duplicates = remove_duplicates,
                 align = align, alignment_dir = alignment_dir)
@@ -227,7 +227,7 @@ singledir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
 pairdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                                 calculate_residuals = TRUE, save_residuals = FALSE,
                                 save_prediction = FALSE, save_pca = FALSE,
-                                normalize = FALSE, residualdir = "residuals",
+                                normalize = FALSE, residual_dir = "residuals",
                                 prediction_dir = "prediction", pca_dir = "pca",
                                 gp_dir = "gp", remove_duplicates = TRUE,
                                 feature_throughputs = FALSE, align = TRUE,
@@ -253,7 +253,7 @@ pairdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                 dim_reduction = dim_reduction, feature_throughputs = TRUE,
                 features = 0, calculate_residuals = calculate_residuals,
                 save_residuals = save_residuals, save_prediction = save_prediction,
-                save_pca = save_pca, normalize = normalize, residualdir = residualdir,
+                save_pca = save_pca, normalize = normalize, residual_dir = residual_dir,
                 prediction_dir = prediction_dir, pca_dir = pca_dir, gp_dir = gp_dir,
                 remove_duplicates = remove_duplicates, align = align,
                 alignment_dir = alignment_dir)
@@ -266,7 +266,7 @@ pairdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                 dim_reduction = dim_reduction, feature_throughputs = FALSE,
                 features = 0, calculate_residuals = calculate_residuals,
                 save_residuals = save_residuals, save_prediction = save_prediction,
-                save_pca = save_pca, normalize = normalize, residualdir = residualdir,
+                save_pca = save_pca, normalize = normalize, residual_dir = residual_dir,
                 prediction_dir = prediction_dir, pca_dir = pca_dir, gp_dir = gp_dir,
                 remove_duplicates = remove_duplicates, align = align,
                 alignment_dir = alignment_dir
@@ -302,7 +302,7 @@ pairdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
 # - save_prediction saves the predicted data
 # - save_pca        save PCA data
 # - normalize       whether normalize sequences
-# - residualdir     folder name for residual data
+# - residual_dir     folder name for residual data
 # - prediction_dir  folder name for predicted data
 # - pca_dir         folder name for PCA data
 # - gp_dir          fodler name for GP-LVM data
@@ -314,7 +314,7 @@ pair_residual_complexity <- function(seqfile_a, seqfile_b, seqnum_a = 1, seqnum_
                                 feature_throughputs = FALSE, features = 0,
                                 calculate_residuals = TRUE, save_residuals = FALSE,
                                 save_prediction = FALSE, save_pca = FALSE,
-                                normalize = FALSE, residualdir = "residuals",
+                                normalize = FALSE, residual_dir = "residuals",
                                 prediction_dir = "prediction", pca_dir = "pca",
                                 gp_dir = "gp", remove_duplicates = TRUE,
                                 align = TRUE, alignment_dir = "alignment") {
@@ -328,8 +328,8 @@ pair_residual_complexity <- function(seqfile_a, seqfile_b, seqnum_a = 1, seqnum_
                     seqfile_b = seqfile_b, seqnum_a = seqnum_a, seqnum_b = seqnum_b,
                     fps = fps, dim_reduction = dim_reduction, features = features,
                     save_pca = save_pca, calculate_residuals = calculate_residuals,
-                    normalize = normalize, pca_dir = pca_dir, gp_dir = gp_dir,
-                    remove_duplicates = remove_duplicates, align = align,
+                    normalize = normalize, residual_dir = residual_dir, pca_dir = pca_dir,
+                    gp_dir = gp_dir, remove_duplicates = remove_duplicates, align = align,
                     alignment_dir = alignment_dir)
     # compute complexity
     results_a_b <- evaluate_complexity(pair_a_b)
@@ -339,8 +339,8 @@ pair_residual_complexity <- function(seqfile_a, seqfile_b, seqnum_a = 1, seqnum_
                     seqfile_b = seqfile_a, seqnum_a = seqnum_b, seqnum_b = seqnum_a,
                     fps = fps, dim_reduction = dim_reduction, features = features,
                     save_pca = save_pca, calculate_residuals = calculate_residuals,
-                    normalize = normalize, pca_dir = pca_dir, gp_dir = gp_dir,
-                    remove_duplicates = remove_duplicates, align = align,
+                    normalize = normalize, residual_dir = residual_dir, pca_dir = pca_dir,
+                    gp_dir = gp_dir, remove_duplicates = remove_duplicates, align = align,
                     alignment_dir = alignment_dir)
     # compute complexity
     results_b_a <- evaluate_complexity(pair_b_a)
@@ -359,8 +359,8 @@ pair_residual_complexity <- function(seqfile_a, seqfile_b, seqnum_a = 1, seqnum_
                          "results_a_b" = results_a_b, "results_b_a" = results_b_a)
         
     if (save_residuals) {
-      write_data(dir=residualdir, sequence_file=seqfile_a, data=results_a_b@res_a)
-      write_data(dir=residualdir, sequence_file=seqfile_b, data=results_b_a@res_b)
+      write_data(dir=residual_dir, sequence_file=seqfile_a, data=results_a_b@res_a)
+      write_data(dir=residual_dir, sequence_file=seqfile_b, data=results_b_a@res_b)
     }
     
     if (save_prediction) {
@@ -395,7 +395,7 @@ setClass("residualComplexityEvaluator", representation(
   save_pca			= "logical", # option to save pca-reduced data
   calculate_residuals = "logical", # option to calculate residuals
   normalize			= "logical", # option to normalize sequences
-  residualdir		= "character", # dir of residuals
+  residual_dir		= "character", # dir of residuals
   alignment_dir	= "character", # dir of alignment indeces
   prediction_dir = "character", # dir of prediction data
   pca_dir				= "character", # dir of pca-reduced sequences
@@ -464,7 +464,8 @@ setMethod("load_residuals", "residualComplexityEvaluator",
                 this@calculate_residuals,
                 this@normalize,
                 this@remove_duplicates,
-                this@alignment_dir)
+                this@alignment_dir,
+                this@residual_dir)
             } else {
               data <- load_unaligned_residuals(
                 this@seqfile_a,
@@ -474,7 +475,8 @@ setMethod("load_residuals", "residualComplexityEvaluator",
                 this@features,
                 this@calculate_residuals,
                 this@normalize,
-                this@remove_duplicates)
+                this@remove_duplicates,
+                this@residual_dir)
             }
             # original sequences
             this@seq_a <- data$sequence_a
