@@ -1,26 +1,33 @@
-# Algorithm for calulating mutual information based on k-nn search.
+# Algorithm for calculating mutual information based on k-nn search.
 # MI value in nats.
 # Based on Kraskov et. al.
 # Santeri Räisänen, 2014
 #
-#
-#
-#
 
-library("iterators",lib.loc="~/R/Rpackages");
-library("foreach",lib.loc="~/R/Rpackages");
-library("doParallel",lib.loc="~/R/Rpackages");
+## The main function to be called.
+# Input seqs must be vectors or matrices (no lists!).
+evaluate_mi <- function(seq1, seq2, k=2) {    
+  k <<- k # I assume this is needed.
+  d_size <- NCOL(seq1)
+  data <- cbind(seq1,seq2)
+  radii = get_all_knn(data,k,d_size)
+  print("All neighbours found!")
+  y_points <- count_points(radii[,1],seq1)
+  x_points <- count_points(radii[,2],seq2)
+  
+  mi <- (-1*(mean(digamma(x_points) + digamma(y_points))) - 1/(k-1) +
+    digamma(k-1) + digamma(NROW(seq1)))
+}
 
 construct_sp_tree <- function(data, METRIC, b_size)  {      
   sp_tree <- list(data)
   i <- 1;
   
-  while(1==1) {
+  while (1==1) {
     p <- part(sp_tree[[i]],METRIC);
     
     p <- list(p);
     if (is.matrix(data)) {
-      
       pr <- projections(p[[1]],sp_tree[[i]]);
       
       SU <- summary(pr);
@@ -31,36 +38,25 @@ construct_sp_tree <- function(data, METRIC, b_size)  {
       p[[3]] <- SU[2];
       p[[4]] <- SU[5];
       
-      
       sp_tree[[i]] <- p;
       
       if ((log2(2*(i+1)))==floor(log2(2*(i+1))) && (NROW(sp_tree[[2*i]])<=b_size)){
-        
-        return(sp_tree);;                                                                      
+        return(sp_tree)                                                                
       }
-      i<-i+1;
+      i <- i+1;
     }
   }
 }
 
-
-part <- function(data, METRIC) {
+# Returns a vector which defines the partition of the set of vectors
+part <- function(data, METRIC) {  
+  A <- euclid_d(data, data[1,])
+  a <- data[which.max(A),]
+  A <- euclid_d(data, a)
+  b <- data[which.max(A),]
   
-  
-  
-  A <- euclid_d(data,data[1,]);
-  a <- data[which.max(A),];
-  A <- euclid_d(data,a);
-  b <- data[which.max(A),];
-  
-  a <- a-b;
-  
-  
-  
-  return(a);       #Retuns vector which defines the partition of the set of vectors
+  a <- a-b
 }
-
-
 
 projections <- function(pr_v, data) {
   k <- sqrt(sum(pr_v*pr_v));
@@ -70,38 +66,24 @@ projections <- function(pr_v, data) {
   return(sum(data*pr_v)/k);
 }
 
-evaluate_mi <- function(seq1,seq2,k=2) {                                
-  d_size <- NCOL(seq1);                                                  
-  data <- cbind(seq1,seq2);
-  radii = get_all_knn(data,k,d_size);
-  print("all neighbours found!")
-  y_points <- count_points(radii[,1],seq1);
-  x_points <- count_points(radii[,2],seq2)
-  
-  return(-1*(mean(digamma(x_points)+digamma(y_points))) - (1/(k-1)) + digamma(k-1) + digamma(NROW(seq1)));
-}
 
-
-get_all_knn <- function(data,k, partition) {                 #this calulates the k-nearest neighbour for each row in matrix 
-  
+# this calulates the k-nearest neighbour for each row in matrix
+get_all_knn <- function(data, k, partition) {
   m_part <<- partition;
-  
-  sp_tree <- construct_sp_tree(data,max_d,NROW(data)/25);                   #with regards to the metric-function given.
+  # with regards to the metric-function given
+  sp_tree <- construct_sp_tree(data,max_d,NROW(data)/25); 
   neighbours <- c();
   registerDoParallel();
   limit <- log2(length(sp_tree)+1)-1
   radii <- foreach(i=1:NROW(data), .combine='rbind') %dopar% {
     level <- 1;
     a <- recursive_search(sp_tree,data[i,],k,max_d,level,limit)[,2:(NCOL(data)+1)];
-    d_x <- euclid_d(a[,1:m_part],data[i,1:m_part]);
+	d_x <- euclid_d(a[,1:m_part],data[i,1:m_part]);
     d_y <- euclid_d(a[,(m_part+1):NCOL(data)],data[i,(m_part+1):NCOL(data)]);
     return(c(max(d_x),max(d_y)));
   }
-  
   return(radii);
 }
-
-
 
 recursive_search <- function(sp_tree,Vector,k,METRIC,level,limit)  {
   if (level>=(2^limit)){
@@ -120,7 +102,7 @@ recursive_search <- function(sp_tree,Vector,k,METRIC,level,limit)  {
   if (r>sp_tree[[level]][[3]]) {
     a <- recursive_search(sp_tree,Vector,k,METRIC,2*level,limit);
   }
-  if (r<sp_tree[[level]][[4]]) {
+  if (r < sp_tree[[level]][[4]]) {
     b <- recursive_search(sp_tree,Vector,k,METRIC,2*level+1,limit);
   }
   
@@ -138,90 +120,77 @@ recursive_search <- function(sp_tree,Vector,k,METRIC,level,limit)  {
   }
 }
 
-
-
 max_d <- function(a, b){
-  l <- m_part;                   
-  r <- NCOL(a);
+  l <- m_part                   
+  r <- NCOL(a)
   
-  n1 <- euclid_d(a[,1:l],b[1:l]);
-  n2 <- euclid_d(a[,(l+1):r],b[(l+1):r]);
+  n1 <- euclid_d(a[,1:l],b[1:l])
+  n2 <- euclid_d(a[,(l+1):r],b[(l+1):r])
   
-  return(apply(cbind(n1,n2),1,max));
+  return(apply(cbind(n1,n2),1,max))
 }
-
-
-
 
 euclid_d <- function(a, b) {        
-  if (NROW(a)==NROW(b)&&!is.matrix(a)&&!is.matrix(b)) {
-    
-    return(sqrt(sum((a-b)^2)));
+  if (NROW(a)==NROW(b) && !is.matrix(a) && !is.matrix(b)) {
+    return(sqrt(sum((a-b)^2)))
   }
   else {
-    
-    return(sqrt(apply(t(t(a)-b)^2,1,sum)));
+    return(sqrt(apply(t(t(a)-b)^2,1,sum)))
   }
 }
-
 
 recursive_count <- function(sp_tree,Vector,radius,METRIC,level,limit)  {
   if (level>=(2^limit)){
-    a <- METRIC(sp_tree[[level]],Vector);
-    return(NROW(which(a<=radius)));
+    a <- METRIC(sp_tree[[level]],Vector)
+    return(NROW(which(a<=radius)))
   }
   
   r = projections(sp_tree[[level]][[1]],Vector)
-  a <- 0;
-  b <- 0;
+  a <- 0
+  b <- 0
   if (r>sp_tree[[level]][[3]]) {
-    a <- recursive_count(sp_tree,Vector,radius,METRIC,2*level,limit);
+    a <- recursive_count(sp_tree,Vector,radius,METRIC,2*level,limit)
   }
   if (r<sp_tree[[level]][[4]]) {
-    b <- recursive_count(sp_tree,Vector,radius,METRIC,2*level+1,limit);
+    b <- recursive_count(sp_tree,Vector,radius,METRIC,2*level+1,limit)
   }
-  
-  return(a+b);
+  return(a+b)
 }
-
-
 
 count_points <- function(radii, data) {
   if (!is.matrix(data)) {
-    return(count_points_s(radii,data));
+    return(count_points_s(radii,data))
   } 
   
-  ret <- c();
+  ret <- c()
   
-  
-  sp_tree <- construct_sp_tree(data,euclid_d,NROW(data)/25); 
+  sp_tree <- construct_sp_tree(data,euclid_d,NROW(data)/25)
   
   limit <- log2(length(sp_tree)+1)-1
-  ret <- foreach (j = 1:NROW(data),.combine="rbind") %dopar% {
-    level<-1
-    recursive_count(sp_tree,data[j,],radii[j],euclid_d,level,limit);
+  ret <- foreach (j = 1:NROW(data), .combine="rbind") %dopar% {
+    level <- 1
+    recursive_count(sp_tree,data[j,],radii[j],euclid_d,level,limit)
   }
-  return(ret-1);
+  return(ret-1)
 }
 
-
 count_points_s <- function(radii, data) {
-  ret <- matrix(nrow = NROW(data), ncol = 1);
-  n_data <- data[order(data)];
+  ret <- matrix(nrow = NROW(data), ncol = 1)
+  n_data <- data[order(data)]
   for (i in 1:NROW(data)) {
-    counter <- 0;
-    ind <- which(n_data==data[i]);
-    radius = radii[i];
-    while (ind<=NROW(data)&&euclid_d(n_data[ind],data[i])<=radius) {
-      counter = counter + 1;
-      ind = ind + 1;
+    counter <- 0
+    ind <- which(n_data==data[i])
+    radius <- radii[i]
+    while (ind<=NROW(data) && euclid_d(n_data[ind],data[i]) <= radius) {
+      counter <- counter + 1
+      ind <- ind + 1
     }
-    ind <- which(n_data==data[i])-1;
+    ind <- which(n_data==data[i])-1
     while (ind > 0 && euclid_d(n_data[ind],data[i])<=radius) {
-      counter <- counter + 1;
-      ind = ind - 1;
+      counter <- counter + 1
+      ind <- ind - 1
     }
-    ret[i] <- counter;
+    ret[i] <- counter
   }
-  return(ret-1);
+  return(ret-1)
 }
