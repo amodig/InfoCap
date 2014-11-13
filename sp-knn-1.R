@@ -15,7 +15,7 @@ evaluate_mi <- function(seq1, seq2, k=2) {
   y_points <- count_points(radii[,1],seq1)
   x_points <- count_points(radii[,2],seq2)
   
-  mi <- (-1*(mean(digamma(x_points) + digamma(y_points))) - 1/(k-1) +
+  mi <- (-1*( mean(digamma(x_points)) + mean(digamma(y_points)) ) - (1/(k-1)) +
     digamma(k-1) + digamma(NROW(seq1)))
 }
 
