@@ -12,11 +12,11 @@ evaluate_mi <- function(seq1, seq2, k=2) {
   data <- cbind(seq1,seq2)
   radii = get_all_knn(data,k,d_size)
   print("All neighbours found!")
-  y_points <- count_points(radii[,1],seq1)
-  x_points <- count_points(radii[,2],seq2)
+  y_points <- count_points(radii[,1], seq1)
+  x_points <- count_points(radii[,2], seq2)
   
-  mi <- (-1*( mean(digamma(x_points)) + mean(digamma(y_points)) ) - (1/(k-1)) +
-    digamma(k-1) + digamma(NROW(seq1)))
+  return(-1*(mean(digamma(x_points)+digamma(y_points))) - (1/(k-1)) +
+           digamma(k-1) + digamma(NROW(seq1)))
 }
 
 construct_sp_tree <- function(data, METRIC, b_size)  {      
@@ -67,7 +67,7 @@ projections <- function(pr_v, data) {
 }
 
 
-# this calulates the k-nearest neighbour for each row in matrix
+# this calculates the k-nearest neighbour for each row in matrix
 get_all_knn <- function(data, k, partition) {
   m_part <<- partition;
   # with regards to the metric-function given
@@ -85,8 +85,8 @@ get_all_knn <- function(data, k, partition) {
   return(radii);
 }
 
-recursive_search <- function(sp_tree,Vector,k,METRIC,level,limit)  {
-  if (level>=(2^limit)){
+recursive_search <- function(sp_tree, Vector, k, METRIC, level, limit)  {
+  if (level >= (2^limit)) {
     a <- METRIC(sp_tree[[level]],Vector);
     
     ord <- order(a);
@@ -95,15 +95,15 @@ recursive_search <- function(sp_tree,Vector,k,METRIC,level,limit)  {
     return(cbind(a[ord[1:k]],copy[1:k,]));
   }
   
-  r = projections(sp_tree[[level]][[1]],Vector)
+  r <- projections(sp_tree[[level]][[1]],Vector)
   a <- c(-1);
   b <- c(-1);
   
-  if (r>sp_tree[[level]][[3]]) {
-    a <- recursive_search(sp_tree,Vector,k,METRIC,2*level,limit);
+  if (r > sp_tree[[level]][[3]]) {
+    a <- recursive_search(sp_tree, Vector, k, METRIC, 2*level, limit);
   }
   if (r < sp_tree[[level]][[4]]) {
-    b <- recursive_search(sp_tree,Vector,k,METRIC,2*level+1,limit);
+    b <- recursive_search(sp_tree, Vector, k, METRIC, 2*level+1, limit);
   }
   
   if (!is.matrix(a)) {
@@ -161,15 +161,12 @@ count_points <- function(radii, data) {
   if (!is.matrix(data)) {
     return(count_points_s(radii,data))
   } 
-  
   ret <- c()
-  
-  sp_tree <- construct_sp_tree(data,euclid_d,NROW(data)/25)
-  
+  sp_tree <- construct_sp_tree(data, euclid_d, NROW(data)/25)
   limit <- log2(length(sp_tree)+1)-1
   ret <- foreach (j = 1:NROW(data), .combine="rbind") %dopar% {
     level <- 1
-    recursive_count(sp_tree,data[j,],radii[j],euclid_d,level,limit)
+    recursive_count(sp_tree, data[j,], radii[j], euclid_d, level, limit)
   }
   return(ret-1)
 }
@@ -179,14 +176,14 @@ count_points_s <- function(radii, data) {
   n_data <- data[order(data)]
   for (i in 1:NROW(data)) {
     counter <- 0
-    ind <- which(n_data==data[i])
+    ind <- which(n_data == data[i])
     radius <- radii[i]
-    while (ind<=NROW(data) && euclid_d(n_data[ind],data[i]) <= radius) {
+    while (ind <= NROW(data) && euclid_d(n_data[ind],data[i]) <= radius) {
       counter <- counter + 1
       ind <- ind + 1
     }
     ind <- which(n_data==data[i])-1
-    while (ind > 0 && euclid_d(n_data[ind],data[i])<=radius) {
+    while (ind > 0 && euclid_d(n_data[ind],data[i]) <= radius) {
       counter <- counter + 1
       ind <- ind - 1
     }

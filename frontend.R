@@ -4,7 +4,7 @@
 
 # The MIT License (MIT)
 # Copyright (c) 2013 Arttu Modig
-# Version 1.03
+# Version 1.04
 
 cat("Starting frontend.R\n")
 cat("Arguments passed to Rscript:\n")
@@ -32,10 +32,11 @@ sink(stdout(), type="message")
 
 # Get options, using the spec as defined by the enclosed list.
 # We read the options from the default: commandArgs(TRUE).
-spec = matrix(c( # short flags in use: a b c d e f g h i j k l m n o p q r s t u v w x y z
+spec = matrix(c( # short flags in use: a b C c d e f g h i j k l M m n O o P p q r s t u v w x y z
     'resultfile', 'o', 2, "character",
+    'resultlist', 'O', 2, "character",
     'fps', 'f', 2, "integer",
-    'method', 'm', 2, "character",
+    'structure', 'm', 2, "character",
     'maindir', 'd', 2, "character",
     'seqfile_a', 'a', 2, "character",
     'seqfile_b', 'b', 2, "character",
@@ -47,8 +48,8 @@ spec = matrix(c( # short flags in use: a b c d e f g h i j k l m n o p q r s t u
     'save_prediction', 'j', 2, "logical",
     'save_pca', 'p', 2, "logical",
     'normalize', 'n', 2, "logical",
-    'residualdir', 'r', 2, "character",
-    'prediction_dir', 'k', 2, "character",
+    'residual_dir', 'r', 2, "character",
+    'prediction_dir', 'P', 2, "character",
     'remove_duplicates', 'e', 2, "logical",
     'feature_throughputs', 't', 2, "logical",
     'select_features', 'l', 2, "character",
@@ -58,7 +59,10 @@ spec = matrix(c( # short flags in use: a b c d e f g h i j k l m n o p q r s t u
     'write_results', 'w', 2, "logical",
     'alidir', 'z', 2, "character",
     'pca_dir', 'q', 2, "character",
-	  'gp_dir', 'h', 2, "character"), ncol=4,byrow=TRUE);
+	  'gp_dir', 'h', 2, "character",
+    'mi_method', 'M', 2, "character",
+    'k', 'k', 2, "integer",
+    'complexity_method', 'C', 2, "character"), ncol=4, byrow=TRUE);
 opt = getopt(spec);
 
 # if help was asked for print a friendly message
@@ -71,8 +75,9 @@ if ( !is.null(opt$help) ) {
 # set some reasonable defaults for the options that are needed,
 # but were not specified.
 if ( is.null(opt$resultfile ) ) { opt$resultfile = "results.txt" }
+if ( is.null(opt$resultlist ) ) { opt$resultlist = "scores.txt" }
 if ( is.null(opt$fps ) ) { opt$fps = 120 }
-if ( is.null(opt$method ) ) { opt$method = "subdir" }
+if ( is.null(opt$structure ) ) { opt$structure = "subdir" }
 if ( is.null(opt$maindir ) ) { opt$maindir = "." }
 if ( is.null(opt$seqfile_a ) ) { opt$seqfile_a = "01.txt" }
 if ( is.null(opt$seqfile_b ) ) { opt$seqfile_b = "02.txt" }
@@ -84,7 +89,7 @@ if ( is.null(opt$save_residuals ) ) { opt$save_residuals = FALSE }
 if ( is.null(opt$save_prediction ) ) { opt$save_prediction = FALSE }
 if ( is.null(opt$save_pca ) ) { opt$save_pca = FALSE }
 if ( is.null(opt$normalize ) ) { opt$normalize = FALSE }
-if ( is.null(opt$residualdir ) ) { opt$residualdir = "residuals" }
+if ( is.null(opt$residual_dir ) ) { opt$residual_dir = "residuals" }
 if ( is.null(opt$prediction_dir ) ) { opt$prediction_dir = "prediction" }
 if ( is.null(opt$alidir ) ) { opt$alidir = "alignment" }
 if ( is.null(opt$pca_dir ) ) { opt$pca_dir = "pca" }
@@ -95,9 +100,12 @@ if ( is.null(opt$select_features ) ) { opt$select_features = "0" }
 if ( is.null(opt$append_results ) ) { opt$append_results = FALSE }
 if ( is.null(opt$align ) ) { opt$align = TRUE }
 if ( is.null(opt$write_results ) ) { opt$write_results = TRUE }
+if ( is.null(opt$mi_method ) ) { opt$mi_method = "gaussian" }
+if ( is.null(opt$k ) ) { opt$k = 2 }
+if ( is.null(opt$complexity_method ) ) { opt$complexity_method = "ar" }
 
-cat("Use method: ")
-cat(opt$method)
+cat("Use structure method: ")
+cat(opt$structure)
 cat("\n")
 
 # current working dir
@@ -108,7 +116,7 @@ cat("Change to dir: ")
 cat(opt$maindir)
 cat("\n")
 
-if (opt$method == "subdir") {
+if (opt$structure == "subdir") {
     # CD to directory, default "."
     try(setwd(opt$maindir))
     output = subdir_residual_complexity(
@@ -119,7 +127,7 @@ if (opt$method == "subdir") {
                 save_prediction = opt$save_prediction,
                 save_pca = opt$save_pca,
                 normalize = opt$normalize,
-                residualdir = opt$residualdir,
+                residual_dir = opt$residual_dir,
                 prediction_dir = opt$prediction_dir,
                 remove_duplicates = opt$remove_duplicates,
                 feature_throughputs = opt$feature_throughputs,
@@ -128,8 +136,11 @@ if (opt$method == "subdir") {
                 alignment_dir = opt$alidir,
                 pca_dir = opt$pca_dir,
                 gp_dir = opt$gp_dir,
-                results_file = opt$resultfile)
-} else if (opt$method == "pairdir") {
+                results_file = opt$resultfile,
+                mi_method = opt$mi_method,
+                k = opt$k,
+                complexity_method = opt$complexity_method)
+} else if (opt$structure == "pairdir") {
     try(setwd(opt$maindir))
     output = pairdir_residual_complexity(
                 fps = opt$fps,
@@ -139,15 +150,18 @@ if (opt$method == "subdir") {
                 save_prediction = opt$save_prediction,
                 save_pca = opt$save_pca,
                 normalize = opt$normalize,
-                residualdir = opt$residualdir,
+                residual_dir = opt$residual_dir,
                 prediction_dir = opt$prediction_dir,
                 remove_duplicates = opt$remove_duplicates,
                 feature_throughputs = opt$feature_throughputs,
                 align = opt$align,
                 alignment_dir = opt$alidir,
                 pca_dir = opt$pca_dir,
-                gp_dir = opt$gp_dir)
-} else if (opt$method == "singledir") {
+                gp_dir = opt$gp_dir,             
+                mi_method = opt$mi_method,
+                k = opt$k,
+                complexity_method = opt$complexity_method)
+} else if (opt$structure == "singledir") {
     try(setwd(opt$maindir))
     output = singledir_residual_complexity(
                 fps = opt$fps,
@@ -157,15 +171,18 @@ if (opt$method == "subdir") {
                 save_prediction = opt$save_prediction,
                 save_pca = opt$save_pca,
                 normalize = opt$normalize,
-                residualdir = opt$residualdir,
+                residual_dir = opt$residual_dir,
                 prediction_dir = opt$prediction_dir,
                 remove_duplicates = opt$remove_duplicates,
                 feature_throughputs = opt$feature_throughputs,
                 align = opt$align,
                 alignment_dir = opt$alidir,
                 pca_dir = opt$pca_dir,
-                gp_dir = opt$gp_dir)
-} else if (opt$method == "pair") {
+                gp_dir = opt$gp_dir,             
+                mi_method = opt$mi_method,
+                k = opt$k,
+                complexity_method = opt$complexity_method)
+} else if (opt$structure == "pair") {
     try(setwd(opt$maindir))
     output = pair_residual_complexity(
                 opt$seqfile_a,
@@ -181,15 +198,18 @@ if (opt$method == "subdir") {
                 save_prediction = opt$save_prediction,
                 save_pca = opt$save_pca,
                 normalize = opt$normalize,
-                residualdir = opt$residualdir,
+                residual_dir = opt$residual_dir,
                 prediction_dir = opt$prediction_dir,
                 remove_duplicates = opt$remove_duplicates,
                 align = opt$align,
                 alignment_dir = opt$alidir,
                 pca_dir = opt$pca_dir,
-                gp_dir = opt$gp_dir)
+                gp_dir = opt$gp_dir,             
+                mi_method = opt$mi_method,
+                k = opt$k,
+                complexity_method = opt$complexity_method)
 } else {
-    stop("Unknown method. Please re-check arguments.\n")
+    stop("Unknown structure method. Please re-check arguments.\n")
     q(status=10)
 }
 
@@ -199,7 +219,7 @@ if (opt$method == "subdir") {
 
 # write results in a separate file
 if (opt$write_results) {
-    if (opt$method != "subdir") { # subdirs are handled differently (results are appended)
+    if (opt$structure != "subdir") { # subdirs are handled differently (results are appended)
         write.table(output$results, file = opt$resultfile, sep = '\t')
     }
 }
@@ -218,6 +238,7 @@ if (opt$feature_throughputs) {
   cat("feature-TP-orig.txt\n")
 }
 
+# for demo purposes
 if (opt$append_results) {
     try(setwd("..")) # go back up!
     score <- max(output$results[,1]) # choose maximum score of the pair
@@ -230,9 +251,10 @@ if (opt$append_results) {
     scoreline <- sprintf("%s\t%.2f", opt$username, score)
     cat(scoreline)
     cat("\n")
-    write(scoreline, file="scores.txt", append=TRUE)
-    cat("Appended TP-score into: \n")
-    cat("scores.txt\n")
+    write(scoreline, file=opt$resultlist, append=TRUE)
+    cat("Appended result into: \n")
+    cat(opt$resultlist)
+    cat("\n")
 }
 
 # signal success and exit.

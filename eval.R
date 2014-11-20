@@ -2,11 +2,17 @@
 
 # The MIT License (MIT)
 # Copyright (c) 2013 Arttu Modig
-# Version 1.03
+# Version 1.04
 
 source("infocapacity.R")
 source("data_handling.R")
+source("sp-knn-1.R")
+
 library("methods")
+library("iterators");
+library("foreach");
+library("doParallel");
+
 #options(error = quote({traceback(); q()}))
 
 # subdir_residual_complexity
@@ -35,8 +41,10 @@ library("methods")
 # - align                   whether time-aligning data or not
 # - write_results           whether write results in to an ASCII file
 # - alignment_dir           name of the alignment index folder
-# - dimred_dir              (not in use)
 # - results_file            name of the TSV-ASCII results file
+# - mi_method               mutual information calculation method
+# - k                       k for k-NN mutual information method
+# - complexity_method       complexity estimation method
 #
 # Example of the directory tree:
 # - working directory
@@ -77,7 +85,9 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                             pca_dir = "pca", gp_dir = "gp", remove_duplicates = TRUE,
                             feature_throughputs = FALSE, align = TRUE,
                             write_results = FALSE, alignment_dir = "alignment",
-                            dimred_dir = ".", results_file = "results.txt") {
+                            results_file = "results.txt",
+                            mi_method = "gaussian", k = 2,
+                            complexity_method = "ar") {
     # get maindir path
     maindir <- getwd()
     
@@ -88,8 +98,7 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
         print(sprintf("------- Evaluating subdir: %s -------", subdirs[i]))
         # sets the path to subdir
         setwd(subdirs[i])
-        # sets the path to dimension reduced data folder
-        setwd(dimred_dir)
+
         # count the number of txt-type (ASCII) data
         #sequences <- length(dir(".", "^[[:digit:]]+.txt$"))
         sequences <- dir(".", "*.(txt|tsv)$")
@@ -120,7 +129,9 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                     residual_dir = residual_dir,
                     prediction_dir = prediction_dir, pca_dir = pca_dir,
                     remove_duplicates = remove_duplicates,
-                    align = align, alignment_dir = alignment_dir)
+                    align = align, alignment_dir = alignment_dir,
+                    mi_method = mi_method, k = k,
+                    complexity_method = complexity_method)
                 all_results[rows[1]:rows[2],] <- M$results
                 rows <- rows + 2
                 if (feature_throughputs) {
@@ -155,7 +166,8 @@ subdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
 # in the current directory (with the directory structure specified
 # in the readme file). Sequences are considered to be repetitions of
 # a same motion/gesture.
-singledir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
+singledir_residual_complexity <- function(fps = 120,
+                                dim_reduction = "pca",
                                 calculate_residuals = TRUE,
                                 save_residuals = FALSE,
                                 save_prediction = FALSE,
@@ -169,9 +181,10 @@ singledir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                                 feature_throughputs = FALSE,
                                 align = TRUE,
                                 alignment_dir = "alignment",
-                                dimred_dir = ".") {
-    # sets the path to dimension reduced data folder
-    setwd(dimred_dir)
+                                mi_method = "gaussian",
+                                k = 2,
+                                complexity_method = "ar") {
+
     #filenames <- dir("alignment", "^[[:digit:]]+_ali_[[:digit:]]+.txt$")
     #sequences <- length(filenames)
     sequences <- dir(".", "*.(txt|tsv)$")
@@ -201,7 +214,9 @@ singledir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                 residual_dir = residual_dir,
                 prediction_dir = prediction_dir, pca_dir = pca_dir,
                 remove_duplicates = remove_duplicates,
-                align = align, alignment_dir = alignment_dir)
+                align = align, alignment_dir = alignment_dir,
+                mi_method = mi_method, k=k,
+                complexity_method = complexity_method)
             TP_results[rows[1]:rows[2],] <- M$results
             rows <- rows + 2
             if (feature_throughputs) {
@@ -231,18 +246,25 @@ pairdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                                 prediction_dir = "prediction", pca_dir = "pca",
                                 gp_dir = "gp", remove_duplicates = TRUE,
                                 feature_throughputs = FALSE, align = TRUE,
-                                alignment_dir = "alignment", dimred_dir = ".") {
+                                alignment_dir = "alignment",
+                                mi_method = "gaussian", k = 2,
+                                complexity_method = "ar") {
     dir <- getwd()
     print(sprintf("Working dir: %s", dir))
     print(sprintf("Alignment dir: %s", alignment_dir))
     
-    setwd(dimred_dir)
     sequences <- dir(".", "*.(txt|tsv)$")
     N <- length(sequences)
     
-    TP_results <- matrix(nrow = N, ncol = 5,
-        dimnames = list(1:N, c("TP", "shared", "RSS", "RSS_resid", "quotient")))
-    all_features <- list()
+    if (mi_method == "gaussian") {
+      TP_results <- matrix(nrow = N, ncol = 5,
+                           dimnames = list(1:N, c("TP", "shared", "RSS", "RSS_resid", "quotient")))
+      all_features <- list()
+    } else if (mi_method == "knn") {
+      TP_results <- matrix(nrow = N, ncol = 2,
+                           dimnames = list(1:N, c("TP", "shared")))
+      all_features <- list()
+    }
 
     for (i in 1:(N/2)) {
         j = 2 * i - 1
@@ -256,12 +278,13 @@ pairdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                 save_pca = save_pca, normalize = normalize, residual_dir = residual_dir,
                 prediction_dir = prediction_dir, pca_dir = pca_dir, gp_dir = gp_dir,
                 remove_duplicates = remove_duplicates, align = align,
-                alignment_dir = alignment_dir)
+                alignment_dir = alignment_dir,
+                mi_method = mi_method, k=k, complexity_method = complexity_method)
             TP_results[j:k,] <- M$results
             all_features[[i]] <- M$features
         }
         else {
-            TP_results[j:k,] <- pair_residual_complexity(seqfile_a = sequences[j],
+            R <- pair_residual_complexity(seqfile_a = sequences[j],
                 seqfile_b = sequences[k], seqnum_a = j, seqnum_b = k, fps = fps,
                 dim_reduction = dim_reduction, feature_throughputs = FALSE,
                 features = 0, calculate_residuals = calculate_residuals,
@@ -269,8 +292,10 @@ pairdir_residual_complexity <- function(fps = 120, dim_reduction = "pca",
                 save_pca = save_pca, normalize = normalize, residual_dir = residual_dir,
                 prediction_dir = prediction_dir, pca_dir = pca_dir, gp_dir = gp_dir,
                 remove_duplicates = remove_duplicates, align = align,
-                alignment_dir = alignment_dir
-                )$results
+                alignment_dir = alignment_dir,
+                mi_method = mi_method, k=k, complexity_method = complexity_method
+                )
+            TP_results[j:k,]  <- R$results
         }
     }
     
@@ -317,9 +342,19 @@ pair_residual_complexity <- function(seqfile_a, seqfile_b, seqnum_a = 1, seqnum_
                                 normalize = FALSE, residual_dir = "residuals",
                                 prediction_dir = "prediction", pca_dir = "pca",
                                 gp_dir = "gp", remove_duplicates = TRUE,
-                                align = TRUE, alignment_dir = "alignment") {
+                                align = TRUE, alignment_dir = "alignment",
+                                mi_method = "gaussian", k = 2,
+                                complexity_method = "ar", shuffle = FALSE) {
     if (save_residuals) calculate_residuals <- TRUE
     if (save_prediction) calculate_residuals <- TRUE
+    if (mi_method == "knn") {
+      reverse <- FALSE
+    } else {
+      reverse <- TRUE
+    }
+    if (complexity_method == "kf") {
+      calculate_residuals = FALSE  # currently with MATLAB code
+    }
     
     print(sprintf("Evaluating throughput between %s and %s", seqfile_a, seqfile_b))
     
@@ -328,30 +363,42 @@ pair_residual_complexity <- function(seqfile_a, seqfile_b, seqnum_a = 1, seqnum_
                     seqfile_b = seqfile_b, seqnum_a = seqnum_a, seqnum_b = seqnum_b,
                     fps = fps, dim_reduction = dim_reduction, features = features,
                     save_pca = save_pca, calculate_residuals = calculate_residuals,
-                    normalize = normalize, residual_dir = residual_dir, pca_dir = pca_dir,
-                    gp_dir = gp_dir, remove_duplicates = remove_duplicates, align = align,
-                    alignment_dir = alignment_dir)
+                    normalize = normalize, residual_dir = residual_dir,
+                    pca_dir = pca_dir, gp_dir = gp_dir,
+                    remove_duplicates = remove_duplicates, align = align,
+                    alignment_dir = alignment_dir,
+                    mi_method = mi_method, k=k, shuffle = shuffle,
+                    complexity_method = complexity_method)
     # compute complexity
     results_a_b <- evaluate_complexity(pair_a_b)
+    
+    shuffle <- FALSE # for debugging, shuffle the other sequence
     
     # create evaluator object
     pair_b_a <- new("residualComplexityEvaluator", seqfile_a = seqfile_b,
                     seqfile_b = seqfile_a, seqnum_a = seqnum_b, seqnum_b = seqnum_a,
                     fps = fps, dim_reduction = dim_reduction, features = features,
                     save_pca = save_pca, calculate_residuals = calculate_residuals,
-                    normalize = normalize, residual_dir = residual_dir, pca_dir = pca_dir,
-                    gp_dir = gp_dir, remove_duplicates = remove_duplicates, align = align,
-                    alignment_dir = alignment_dir)
-    # compute complexity
-    results_b_a <- evaluate_complexity(pair_b_a)
+                    normalize = normalize, residual_dir = residual_dir,
+                    pca_dir = pca_dir, gp_dir = gp_dir,
+                    remove_duplicates = remove_duplicates, align = align,
+                    alignment_dir = alignment_dir,
+                    mi_method = mi_method, k=k, shuffle = shuffle,
+                    complexity_method = complexity_method)
+    if (reverse) {
+      # compute complexity in reverse order
+      results_b_a <- evaluate_complexity(pair_b_a)
+    } else {
+      results_b_a <- results_a_b
+    }
 
     resultvectors <- rbind(construct_result_vector(results_a_b),
            construct_result_vector(results_b_a), deparse.level = 0)
     
     if (feature_throughputs) {
         feature_tp <- rbind(get_feature_throughputs(results_a_b),
-                        get_feature_throughputs(results_b_a),
-                        deparse.level = 0)   
+                            get_feature_throughputs(results_b_a),
+                            deparse.level = 0)   
         resultlist <- list("results" = resultvectors, "feature_tp" = feature_tp,
                            "results_a_b" = results_a_b, "results_b_a" = results_b_a)
     } else
@@ -360,7 +407,7 @@ pair_residual_complexity <- function(seqfile_a, seqfile_b, seqnum_a = 1, seqnum_
         
     if (save_residuals) {
       write_data(dir=residual_dir, sequence_file=seqfile_a, data=results_a_b@res_a)
-      write_data(dir=residual_dir, sequence_file=seqfile_b, data=results_b_a@res_b)
+      write_data(dir=residual_dir, sequence_file=seqfile_b, data=results_a_b@res_b)
     }
     
     if (save_prediction) {
@@ -383,39 +430,44 @@ setClassUnion("data", c("vector","matrix"))
 # A class for performing the required residual complexity evaluations,
 # including the loading of files, calculation of residuals etc.
 setClass("residualComplexityEvaluator", representation(
-  seqfile_a = "character", # name of file A
-  seqfile_b			= "character", # name of file B
+  seqfile_a = "character",  # name of file A
+  seqfile_b			= "character",  # name of file B
   seqnum_a			= "numeric",	# number of file A
   seqnum_b			= "numeric",  # number of file B
   fps						= "numeric",  # framerate
-  dim_reduction = "character", # choose reduction method
-  features			= "numeric",	# choose features
-  save_residuals = "logical",	# option to save residual data
-  save_prediction = "logical",    # option to save prediction data
+  dim_reduction = "character",  # choose reduction method
+  features			= "numeric",  # choose features
+  save_residuals = "logical",  # option to save residual data
+  save_prediction = "logical",  # option to save prediction data
   save_pca			= "logical", # option to save pca-reduced data
-  calculate_residuals = "logical", # option to calculate residuals
-  normalize			= "logical", # option to normalize sequences
-  residual_dir		= "character", # dir of residuals
-  alignment_dir	= "character", # dir of alignment indeces
-  prediction_dir = "character", # dir of prediction data
-  pca_dir				= "character", # dir of pca-reduced sequences
-  gp_dir				= "character", # dir where gplvm models are saved
-  remove_duplicates	= "logical", # whether to remove duplicate frames
-  align					= "logical", # whether align residuals
-  seq_a         = "data", # original seq a data
-  seq_b         = "data", # original seq b data
-  res_orig_a		= "data",	# original residuals a
-  res_orig_b		= "data",	# original residuals b
-  res_a					= "data",	# processed residual sequence a
-  res_b					= "data",	# processed residual sequence b
-  pred_a				= "data",	# prediction a
-  pred_b				= "data",	# prediction b
+  calculate_residuals = "logical",  # option to calculate residuals
+  normalize			= "logical",  # option to normalize sequences
+  residual_dir		= "character",  # dir of residuals
+  alignment_dir	= "character",  # dir of alignment indeces
+  prediction_dir = "character",  # dir of prediction data
+  pca_dir				= "character",  # dir of pca-reduced sequences
+  gp_dir				= "character",  # dir where gplvm models are saved
+  remove_duplicates	= "logical",  # whether to remove duplicate frames
+  align					= "logical",  # whether align residuals
+  seq_a         = "data",  # original seq a data
+  seq_b         = "data",  # original seq b data
+  res_orig_a		= "data",	 # original residuals a
+  res_orig_b		= "data",	 # original residuals b
+  res_a					= "data",	 # processed residual sequence a
+  res_b					= "data",	 # processed residual sequence b
+  pred_a				= "data",	 # prediction a
+  pred_b				= "data",	 # prediction b
   res_pca_a 	  = "data",
   res_pca_b			= "data",
   eig						= "NULL",
   pcv_a					= "matrix",
   pcv_b					= "matrix",
-  results				= "list"))	# results after evaluation is done
+  results				= "list",  # results after evaluation is done
+  mi_method     = "character",
+  k             = "numeric",
+  complexity_method = "character",
+  shuffle       = "logical"
+  ))
 
 # Evaluates complexity and returns a new residualComplexityEvaluator
 # with the 'results' field set to the result list returned by the
@@ -438,16 +490,77 @@ setMethod("evaluate_complexity", "residualComplexityEvaluator",
                 if (any(is.na(this@res_a)) || any(is.na(this@res_b)))
                      stop("Residual sequences contain NaNs!")
                
+               # do dimensionality reduction (usually PCA)
                this <- do_reduction(this)
-               if (this@dim_reduction == "pca") {
-                 this@results <- evaluate_residual_shared_information(this@res_pca_a,
-                                                                      this@res_pca_b)
-               } else {
-                 this@results <- evaluate_residual_shared_information(this@res_a,
-                                                                      this@res_b)
+               
+               # for debugging, shuffle the other sequence
+               if (this@shuffle == TRUE) {
+                 if (this@dim_reduction == "pca") { 
+                   this@res_pca_b <- this@res_pca_b[sample(1:NROW(this@res_pca_b)),];
+                 } else {              
+                   this@res_b <- this@res_b[sample(1:NROW(this@res_b)),];
+                 }
+               }
+               
+               if (this@mi_method == "gaussian") {
+                 print("Compute Gaussian mutual information")
+                 if (this@dim_reduction == "pca") {
+                   this@results <- evaluate_residual_shared_information(this@res_pca_a,
+                                                                        this@res_pca_b)
+                 } else {
+                   this@results <- evaluate_residual_shared_information(this@res_a,
+                                                                        this@res_b)
+                 }
+               }
+               else if (this@mi_method == "knn") {
+                 print("Compute k-NN mutual information")
+                 if (this@dim_reduction == "pca") {
+                   mi <- evaluate_mi(this@res_pca_a, this@res_pca_b, this@k)
+                   this@results <- list(total_shared = mi)
+                 } else {
+                   mi <- evaluate_mi(this@res_a, this@res_b, this@k)
+                   this@results <- list(total_shared = mi)
+                 }
+               }
+               else {
+                 stop("ERROR: unknown mi_method")
                }
                this
            })
+
+# evaluate MI between features
+setGeneric("evaluate_feature_dependance", 
+           function(this) standardGeneric("evaluate_feature_dependance"))
+setMethod("evaluate_feature_dependance", "residualComplexityEvaluator",
+          function(this) {
+            # load residuals (and prediction)
+            this <- load_residuals(this)
+            # check length
+            if (length(this@res_a)==0) {
+              stop("Empty residual matrix!")
+            }
+            # check for dimensions
+            if (any(dim(this@res_a) != dim(this@res_b)))
+              stop("Cut and/or aligned residual dimensions don't match!")
+            
+            if (any(is.na(this@res_a)) || any(is.na(this@res_b)))
+              stop("Residual sequences contain NaNs!")
+            
+            registerDoParallel();
+            
+            primary_feature <- this@res_a[,1];
+            
+            data <- foreach(i=2:NCOL(this@res_a), .combine='c') %dopar% {
+              evaluate_residual_mi(primary_feature,this@res_a[,i],2)$total_shared;
+            }
+            
+            data <- cbind(c(2:NCOL(this@res_a)),data);
+            #jpeg("~/dependance.jpg");
+            #plot(data[,1],data[,2]);
+            #dev.off();
+            
+            return(data);
+          })
 
 # Loads and aligns the residuals indicated by the two sequence numbers.
 setGeneric("load_residuals",
@@ -530,17 +643,20 @@ setMethod("do_reduction", "residualComplexityEvaluator",
 
 # Generates a vector with throughput, shared information
 # in bits, total sum of residuals, total conditional sum of
-# residuals and the residual quotient. (Vector length is 5.)
+# residuals and the residual quotient.
 setGeneric("construct_result_vector",
            function(this) standardGeneric("construct_result_vector"))
 setMethod("construct_result_vector", "residualComplexityEvaluator",
           function(this) {
-              quotient <- this@results$RSS / this@results$RSS_conditional
-              throughput <- calculate_throughput(this, this@results$total_shared)
-              shared_information_bits <- this@results$total_shared / log(2.0)
-
-              c(throughput, shared_information_bits, this@results$RSS,
-                this@results$RSS_conditional, quotient)
+              tp <- calculate_throughput(this, this@results$total_shared)
+              si <- this@results$total_shared / log(2.0)
+              if (this@mi_method == "gaussian") {
+                quotient <- this@results$RSS / this@results$RSS_conditional
+                return (c(throughput=tp, shared_information=si, RSS=this@results$RSS,
+                  RSS_cond=this@results$RSS_conditional, quotient=quotient))
+              } else if (this@mi_method == "knn") {
+                return (c(throughput=tp, shared_information_bits=si))
+              }
           })
 
 # Generates a vector of feature throughputs. Can only be
@@ -568,7 +684,7 @@ setGeneric("calculate_throughput",
            function(this, shared) standardGeneric("calculate_throughput"))
 setMethod("calculate_throughput", "residualComplexityEvaluator",
           function(this, shared) {
-              shared / NROW(this@res_a) * this@fps / log(2.0)
+            shared / NROW(this@res_a) * this@fps / log(2.0)
           })
 
 # Calculate the number of k-combinations in a set with n elements.

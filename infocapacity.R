@@ -2,7 +2,7 @@
 
 # The MIT License (MIT)
 # Copyright (c) 2013 Arttu Modig
-# Version 1.0
+# Version 1.1
 
 # parameters
 step <- 2
@@ -30,8 +30,10 @@ model <- function(sequence) {
     
     for (feature_idx in 1:num_features) {
         QR <- get_qr_for_feature(feature_idx, sequence_predictors, observed_sequence)
-        residuals[, feature_idx] <- get_residuals_for_feature(QR, observed_sequence, feature_idx)
-        prediction[, feature_idx] <- get_prediction_for_feature(QR, observed_sequence, feature_idx)
+        residuals[, feature_idx] <- get_residuals_for_feature(QR, observed_sequence,
+                                                              feature_idx)
+        prediction[, feature_idx] <- get_prediction_for_feature(QR, observed_sequence,
+                                                                feature_idx)
     }
     return(list("residuals"=residuals, "prediction"=prediction))
 }
@@ -118,6 +120,62 @@ evaluate_residual_shared_information <- function(residuals_a, residuals_b) {
         RSS = total_RSS, RSS_conditional = total_RSS_residual))
 }
 
+# THIS CALCULATES MI ACCORDING TO THE SP_KNN method  
+evaluate_residual_mi <- function(residuals_a, residuals_b, k, feature_mi = TRUE) {
+  if (is.null(k)) {
+    k <- 2
+  }
+  
+  # for single feature vectors
+  if (!is.matrix(residuals_a)) {
+    m <- cbind(residuals_a,residuals_b);                  
+    
+    neighbours <- get_all_knn(m,k);
+      
+    y_points <- count_points(neighbours[,1],m[,1]);
+    x_points <- count_points(neighbours[,2],m[,2]);
+    
+    # calculate mutual information
+    MI <- ( -1*(mean(digamma(x_points)) + mean(digamma(y_points))) - 1/(k-1)
+            + digamma(k-1) + digamma(NROW(m)) );  
+    
+    return (list(total_shared = MI, feature_shared = 1, RSS = 1, RSS_conditional = 1));
+  }
+  
+  # this is for calculating without separating features, assuming sequences are
+  # of the same dimensionality
+  m <- cbind(residuals_a,residuals_b);  
+  neighbours <- get_all_knn(m,k);
+  l = NCOL(residuals_a);
+  y_points <- count_points(neighbours[,1:l],m[,1:l]);
+  x_points <- count_points(neighbours[,(l+1):(NCOL(m))],m[,(l+1):(NCOL(m))]);
+  MI = ( -1*(mean(digamma(x_points)) + mean(digamma(y_points))) - 1/(k-1) +
+         digamma(k-1) + digamma(NROW(m)) );  
+  f_shared = 1;
+  
+  if (feature_mi && is.matrix(residuals_a)) { 
+    registerDoParallel();
+    data <- foreach( i = 0:((NCOL(residuals_a)/3)-1), .combine='cbind') %dopar%  {  
+      lim_l <-  i*3+1;
+      lim_r <- (i+1)*3;
+      m <- cbind(residuals_a[,lim_l:lim_r],residuals_b);                        
+      neighbours <- get_all_knn(m,k,3);
+      
+      y_points <- count_points(neighbours[,1:3],m[,1:3]);
+      x_points <- count_points(neighbours[,4:NCOL(m)],m[,4:NCOL(m)]);
+      
+      -1*(digamma(x_points)+digamma(y_points)) - 1/(k-1) +
+        digamma(k-1) + digamma(NROW(m));  
+    }
+    f_shared = apply(data,2,mean);
+    #browser();
+    #write.table(data,file=sprintf("%s/feature_mi_sequence.txt",getwd()));
+  }
+  
+  return(list(total_shared = MI, feature_shared = f_shared,
+              RSS = 1, RSS_conditional = 1));  
+}
+
 # Fit a linear model seq_a ~ seq_b and return the sum of squared
 # residuals from the model.
 sum_squared_residuals <- function(seq_a, seq_b) {
@@ -155,9 +213,9 @@ choose_number_of_eigenvectors <- function(sdevs, ratio) {
 # Performs normalization on the features of sequence a.
 # Returns the altered sequence.
 normalize_features <- function(a) {
-    a <- t(apply(a,1,'-',apply(a,2,mean)))
-    a <- t(apply(a,1,'/',sqrt(apply(a,2,var))))
-    a[is.nan(a)]<-0
-
-    return(a)
+    # apply over matrix margins
+    a <- t(apply(a,1,'-',apply(a,2,mean))) # zero mean
+    a <- t(apply(a,1,'/',apply(a,2,var))) # unit variance
+    a[is.nan(a)] <- 0 # NaNs to zero
+    a
 }
